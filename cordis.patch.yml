@@ -1,0 +1,4 @@
+# dsh-session-purge bundle patch
+- insert:
+    - id: dsh-session-purge
+      name: 'dsh-session-purge'

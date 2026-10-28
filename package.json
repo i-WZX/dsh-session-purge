@@ -1,0 +1,50 @@
+{
+  "name": "dsh-session-purge",
+  "version": "1.0.0",
+  "description": "Permanently purge DSH sessions from the file system right from the sidebar conversation menu (真正物理彻底删除会话，杜绝幽灵残留与误删风险).",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-connection"
+      ]
+    }
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/i-WZX/dsh-session-purge.git"
+  },
+  "homepage": "https://github.com/i-WZX/dsh-session-purge#readme",
+  "author": "i-WZX",
+  "license": "MIT",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "session",
+    "delete",
+    "purge",
+    "session-delete",
+    "session-purge",
+    "deepseek-harness"
+  ]
+}
