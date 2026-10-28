@@ -20,10 +20,14 @@ DSH（DeepSeek Harness）官方客户端目前仅提供「归档会话」（把�
   - **Tier 4**：侧边栏 DOM 树序与 `updatedAt` 时间戳保底回退。
 - ⚡ **运行中会话安全脱机**：
   - 针对正在生成或处于内存状态的会话，自动取消正在进行的 Agent Turn，并通过标准 `sessions.store.detach()` 从内存脱机，防止删除后被内存定时落盘再次“复活”。
-- 🎨 **现代化原生交互体验**：
-  - 弃用传统的阻塞式 `window.confirm` 和 `window.alert`，采用与 DSH 视觉设计语言对齐的非阻塞沉浸式模态确认弹窗与轻量 Toast 通知，支持键盘 `Esc` 取消与 `Enter` 快捷确认。
-- 🧹 **记账数据完全同步**：
-  - 同步清理 `workspace.json` 中的席位以及全局归档集合（`archivedSessionIds`），不留任何幽灵空项。
+- 🧭 **多级会话定位**：
+  - 优先通过官方 `sessionPersistence` 定位；若官方接口未返回该会话（如跨工作区、新版 `session.v4.jsonl.zstd` 格式），自动回退扫描 `~/.dsh/sessions/{workspace}/{sessionId}`，同样受路径安全断言保护。
+- 🎨 **醒目的警示确认弹窗**：
+  - 弃用阻塞式 `window.confirm` / `window.alert`，采用白底 + 黄色粗边框 + 三角警示图标的确认弹窗与轻量 Toast 通知，支持键盘 `Esc` 取消、`Enter` 确认。
+- 🎯 **菜单精准注入**：
+  - 仅在单条会话的 `···` 菜单（含「归档对话」项）中注入「彻底删除」，不会误入侧边栏顶部的分组/排序/筛选菜单。
+- 🧹 **记账与缓存完全同步**：
+  - 同步清理 `workspace.json` 中的会话席位、全局归档集合（`archivedSessionIds`）以及投影缓存 `storages/session_projcache/sessions/{sessionId}.json`，不留幽灵残留。
 - 📦 **零第三方运行时依赖**：
   - 纯净实现，仅调用 Node.js 内置模块与 DSH 官方注入服务。
 
@@ -31,19 +35,44 @@ DSH（DeepSeek Harness）官方客户端目前仅提供「归档会话」（把�
 
 ## 🚀 安装
 
-在终端中执行：
+请根据你使用的 DSH 形态选择对应的 profile：
+
+| 使用形态 | profile |
+| :--- | :--- |
+| DeepSeek Harness 桌面客户端 | `desktop` |
+| 浏览器访问的 DSH Web | `web` |
+
+### 方式 1：DSH 客户端内安装（推荐）
+
+在「插件管理 / 社区插件市场」的安装输入框中填入 `i-WZX/dsh-session-purge`，安装后重启客户端。
+
+### 方式 2：命令行安装
+
+**桌面客户端**（`dsh` 命令随客户端一同安装，位于安装目录 `resources\runtime\cli\bin\dsh.cmd`）：
 
 ```sh
-npx -p @deepseek-ai/dsh dsh plugin --profile web add i-WZX/dsh-session-purge
+dsh plugin --profile desktop add github:i-WZX/dsh-session-purge
 ```
 
-也可以直接通过 GitHub 仓库安装：
+**DSH Web**：
 
 ```sh
 npx -p @deepseek-ai/dsh dsh plugin --profile web add github:i-WZX/dsh-session-purge
 ```
 
-安装完成后，**重启 DSH Web 实例**即可生效。
+**本地开发链接**（修改源码后重启 DSH 即生效，无需重复安装）：
+
+```sh
+dsh plugin --profile desktop add "<本仓库的本地绝对路径>"
+```
+
+安装完成后，**完全退出并重新打开 DSH**（桌面版请从托盘右键退出）即可生效。
+
+### 卸载
+
+```sh
+dsh plugin --profile desktop remove dsh-session-purge
+```
 
 ---
 
@@ -77,9 +106,28 @@ npx -p @deepseek-ai/dsh dsh plugin --profile web add github:i-WZX/dsh-session-pu
    ├─ 严格校验 sessionId 格式为 `session-<uuid>`
    ├─ 内存解耦：agents.cancel() 终止 Turn + sessions.detach() 剔除内存
    ├─ 路径防御：resolveSafePurgeTarget() 校验确保路径仅指向该 session
-   ├─ 物理销毁：rm(targetPath, { recursive, force })
-   └─ 记账同步：workspaceRegistry 剔除 sessionIds 与 archivedSessionIds
+   ├─ 定位回退：官方接口未命中时扫描 ~/.dsh/sessions/{workspace}/{sessionId}
+   ├─ 物理销毁：rm(targetPath, { recursive, force }) + 删除投影缓存
+   └─ 记账同步：workspaceRegistry + workspace.json 剔除 sessionIds 与 archivedSessionIds
 ```
+
+---
+
+## ❓ 常见问题
+
+| 问题 | 说明 |
+| :--- | :--- |
+| 安装后 `···` 菜单里没有「彻底删除」 | 确认安装到了正确的 profile（桌面版是 `desktop`），并完全退出后重新打开 DSH |
+| 彻底删除后能在「显示已归档」里找回吗？ | **不能**。归档只是隐藏，文件还在磁盘上；彻底删除会把会话目录和缓存从磁盘移除，无法恢复 |
+| 提示「无法识别该会话，请刷新重试」 | 侧边栏与数据快照短暂不一致时可能出现，按 `Ctrl + R` 刷新窗口后重试 |
+| 删除后磁盘占用没明显减少 | 附件（图片等）是多个会话共享的资源，不会随会话一起删除 |
+| 子代理（subagent）会话会一起删除吗？ | 不会，子代理会话单独存储，需要分别删除 |
+
+---
+
+## ⚠️ 免责声明
+
+彻底删除**不可恢复**，请确认后再操作。使用本插件造成的数据损失由使用者自行承担。
 
 ---
 
