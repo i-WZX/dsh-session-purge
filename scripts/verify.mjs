@@ -281,6 +281,112 @@ check("client: resolveSessionId with DOM attribute", () => {
 	assert.equal(resolved, sid);
 });
 
+check("client: injectPurgeEntry strips cloned shortcuts from archive action", () => {
+	class MockElement {
+		constructor(tag, attrs = {}) {
+			this.tagName = tag.toUpperCase();
+			this.children = [];
+			this.childNodes = [];
+			this.attributes = { ...attrs };
+			this.style = {};
+			this.dataset = {};
+			this._textContent = "";
+			this.parentElement = null;
+		}
+		get textContent() {
+			if (this.children.length === 0) return this._textContent;
+			return this.children.map((c) => c.textContent).join(" ");
+		}
+		set textContent(val) {
+			this._textContent = val;
+			this.children = [];
+			this.childNodes = [];
+		}
+		getAttribute(name) { return this.attributes[name] ?? null; }
+		removeAttribute(name) { delete this.attributes[name]; }
+		matches(sel) {
+			if (sel === '[role="menuitem"]') return this.getAttribute("role") === "menuitem";
+			return false;
+		}
+		querySelector(sel) {
+			return this.querySelectorAll(sel)[0] || null;
+		}
+		querySelectorAll(sel) {
+			const res = [];
+			const walk = (node) => {
+				for (const ch of node.children) {
+					if (sel.includes('[role="menuitem"]') && ch.getAttribute("role") === "menuitem") res.push(ch);
+					else if (sel === "span" && ch.tagName === "SPAN") res.push(ch);
+					else if (sel.includes("kbd") && ch.tagName === "KBD") res.push(ch);
+					else if (sel === "*") res.push(ch);
+					walk(ch);
+				}
+			};
+			walk(this);
+			return res;
+		}
+		remove() {
+			if (this.parentElement) {
+				const idx = this.parentElement.children.indexOf(this);
+				if (idx !== -1) this.parentElement.children.splice(idx, 1);
+				const nIdx = this.parentElement.childNodes.indexOf(this);
+				if (nIdx !== -1) this.parentElement.childNodes.splice(nIdx, 1);
+			}
+		}
+		insertBefore(node, ref) {
+			const idx = ref ? this.children.indexOf(ref) : -1;
+			node.parentElement = this;
+			if (idx === -1) {
+				this.children.push(node);
+				this.childNodes.push(node);
+			} else {
+				this.children.splice(idx, 0, node);
+				this.childNodes.splice(idx, 0, node);
+			}
+		}
+		addEventListener() {}
+		cloneNode(deep) {
+			const c = new MockElement(this.tagName.toLowerCase(), this.attributes);
+			c._textContent = this._textContent;
+			if (deep) {
+				for (const ch of this.children) {
+					const clonedCh = ch.cloneNode(true);
+					clonedCh.parentElement = c;
+					c.children.push(clonedCh);
+					c.childNodes.push(clonedCh);
+				}
+			}
+			return c;
+		}
+	}
+
+	const menu = new MockElement("div", { role: "menu" });
+	const archiveItem = new MockElement("button", { role: "menuitem", "aria-keyshortcuts": "Ctrl+Shift+A" });
+	const iconSpan = new MockElement("span");
+	iconSpan.textContent = "[icon]";
+	const labelSpan = new MockElement("span");
+	labelSpan.textContent = "归档会话";
+	const shortcutSpan = new MockElement("span");
+	shortcutSpan.textContent = "Ctrl + Shift + A";
+
+	iconSpan.parentElement = archiveItem;
+	labelSpan.parentElement = archiveItem;
+	shortcutSpan.parentElement = archiveItem;
+	archiveItem.children = [iconSpan, labelSpan, shortcutSpan];
+	archiveItem.childNodes = [iconSpan, labelSpan, shortcutSpan];
+	archiveItem.parentElement = menu;
+	menu.children = [archiveItem];
+	menu.childNodes = [archiveItem];
+
+	clientExports._injectPurgeEntry(menu);
+
+	assert.equal(menu.children.length, 2);
+	const purgeItem = menu.children[1];
+	assert.ok(!purgeItem.getAttribute("aria-keyshortcuts"), "aria-keyshortcuts attribute removed");
+	assert.ok(!purgeItem.textContent.includes("Ctrl + Shift + A"), "shortcut text removed");
+	assert.ok(purgeItem.textContent.includes("彻底删除"), "has purge label");
+});
+
 /** ------------------------------------------------------------------ */
 /** Privacy & Hygiene Check                                            */
 /** ------------------------------------------------------------------ */
